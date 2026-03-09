@@ -176,7 +176,7 @@
             padding: 25px;
             border-radius: 12px;
             width: 90%;
-            max-width: 400px;
+            max-width: 450px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.5);
         }
 
@@ -191,6 +191,7 @@
             padding: 10px;
             border-radius: 8px;
             margin-bottom: 20px;
+            font-family: monospace;
         }
 
         .modal-actions {
@@ -256,7 +257,7 @@
 
     <main id="chat-container" class="chat-container">
         <div class="message ai-message">
-            <div class="bubble">Hello! I am your AI assistant. How can I help you today? You can also click the music icon below to search and play some tunes!</div>
+            <div class="bubble">Hello! I am your AI assistant. How can I help you today? You can also click the music icon below and paste a YouTube link to play some tunes!</div>
         </div>
     </main>
 
@@ -269,11 +270,11 @@
     <div id="music-modal" class="modal hidden">
         <div class="modal-content">
             <h3>Play Music</h3>
-            <p>Enter song or artist name:</p>
-            <input type="text" id="music-input" placeholder="e.g., Arijit Singh, lofi chill" autocomplete="off">
+            <p>Paste a YouTube Video URL:</p>
+            <input type="text" id="music-input" placeholder="e.g., https://www.youtube.com/watch?v=..." autocomplete="off">
             <div class="modal-actions">
                 <button id="cancel-music-btn" class="secondary-btn">Cancel</button>
-                <button id="search-music-btn" class="primary-btn">Search & Play</button>
+                <button id="load-music-btn" class="primary-btn">Load & Play</button>
             </div>
         </div>
     </div>
@@ -292,7 +293,7 @@
         const musicBtn = document.getElementById('music-btn');
         const musicModal = document.getElementById('music-modal');
         const musicInput = document.getElementById('music-input');
-        const searchMusicBtn = document.getElementById('search-music-btn');
+        const loadMusicBtn = document.getElementById('load-music-btn');
         const cancelMusicBtn = document.getElementById('cancel-music-btn');
         const musicStatus = document.getElementById('music-status');
 
@@ -420,53 +421,39 @@
         });
 
         musicInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') searchAndPlayMusic();
+            if (e.key === 'Enter') loadAndPlayMusic();
         });
 
-        searchMusicBtn.addEventListener('click', searchAndPlayMusic);
+        loadMusicBtn.addEventListener('click', loadAndPlayMusic);
 
-        // --- UPDATED SCRAPING LOGIC ---
-        async function searchAndPlayMusic() {
-            const query = musicInput.value.trim();
-            if (!query) return;
+        // --- EXTRACT VIDEO ID FROM URL ---
+        function extractVideoID(url) {
+            // Handles standard, shortened, embedded, and shorts URLs
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=|shorts\/)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
 
-            musicModal.classList.add('hidden');
-            musicStatus.textContent = `⏳ Searching: ${query}...`;
-            musicBtn.textContent = '⏳';
+        function loadAndPlayMusic() {
+            const url = musicInput.value.trim();
+            if (!url) return;
 
-            try {
-                // To bypass YouTube's strict anti-bot protections, we search DuckDuckGo's HTML site for YouTube links
-                const ddgSearchUrl = `https://html.duckduckgo.com/html/?q=site:youtube.com+${encodeURIComponent(query)}`;
-                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(ddgSearchUrl)}`;
+            const videoId = extractVideoID(url);
+
+            if (videoId) {
+                musicModal.classList.add('hidden');
                 
-                const response = await fetch(proxyUrl);
-                if (!response.ok) throw new Error("Proxy error");
+                // Load and play video directly
+                player.loadVideoById(videoId);
+                hasMusicLoaded = true;
+                isPlaying = true;
                 
-                const data = await response.json();
-                const html = data.contents;
-
-                // Match variations of YouTube IDs found in DuckDuckGo's URL encodings (v=, v%3D, youtu.be/)
-                const match = html.match(/(?:v=|v%3D|youtu\.be%2F|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-
-                if (match && match[1]) {
-                    const videoId = match[1];
-                    
-                    // Load and play video
-                    player.loadVideoById(videoId);
-                    hasMusicLoaded = true;
-                    isPlaying = true;
-                    
-                    musicStatus.textContent = `🎵 Now Playing: ${query}`;
-                    musicBtn.textContent = '⏸';
-                    musicBtn.title = "Pause Music";
-                } else {
-                    throw new Error("Could not extract video ID from search results.");
-                }
-            } catch (error) {
-                console.error("Music search error:", error);
-                musicStatus.textContent = '❌ Failed to find music. Try another search.';
-                musicBtn.textContent = '🎵';
-                hasMusicLoaded = false;
+                musicStatus.textContent = `🎵 Playing Video ID: ${videoId}`;
+                musicBtn.textContent = '⏸';
+                musicBtn.title = "Pause Music";
+                musicInput.value = ''; // clear input for next time
+            } else {
+                alert("Invalid YouTube URL. Please paste a valid link.");
             }
         }
     </script>
